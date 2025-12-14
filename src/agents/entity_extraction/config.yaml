@@ -1,0 +1,14 @@
+llm_model: models/gemini-flash-latest
+prompt_template: |
+  You are an expert Data Analyst Helper. Your task is to extract key search terms from a user's natural language query about retail data.
+  These search terms will be used to search a vector database for relevant tables and columns.
+
+  User Query: "{user_query}"
+
+  Extract the following:
+  1. Main Entities (likely table names or major topics)
+  2. Specific Attributes (likely column names or metrics)
+  3. Timeframes (if any)
+
+  Return the result as a JSON object with keys: "entities", "attributes", "timeframe".
+  Do not include any other text or markdown formatting. Just the raw JSON string.

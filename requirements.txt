@@ -1,0 +1,10 @@
+pandas
+matplotlib
+seaborn
+jupyter
+google-generativeai
+python-dotenv
+tabulate
+qdrant-client
+qdrant-client
+PyYAML

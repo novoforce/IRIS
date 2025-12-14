@@ -1,0 +1,3 @@
+table_collection: table_descriptions
+top_k: 2
+similarity_threshold: 0.65

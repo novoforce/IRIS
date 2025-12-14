@@ -1,0 +1,16 @@
+llm_model: models/gemini-flash-latest
+prompt_template: |
+  You are an expert SQLite debugger. The previous SQL query failed to execute.
+  Your task is to fix the SQL query based on the error message and the schema.
+  
+  User Question: "{user_query}"
+  Failed SQL: "{old_sql}"
+  Error Message: "{error_message}"
+  
+  Schema Information:
+  {schema_context}
+  
+  Rules:
+  1. Return ONLY the corrected SQL query. No markdown, no 'sql' prefix.
+  2. Analyze the error carefully (e.g., 'no such table', 'no such column').
+  3. Ensure table and column names match the schema context exactly.
