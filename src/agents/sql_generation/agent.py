@@ -5,29 +5,21 @@ from typing import Dict, List, Any
 # Add project root to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 
-from src.agents.base_agent import BaseAgent
+# CustomLlmAgent
+from src.agents.base_agent import CustomLlmAgent
 
-class SQLGenerationAgent(BaseAgent):
+class SQLGenerationAgent(CustomLlmAgent):
     def __init__(self):
         super().__init__(agent_name="sql_generation")
 
     def execute(self, user_query: str, schema_info: Dict[str, List[Dict[str, Any]]]) -> str:
         """
-        Generates SQL query based on user query and selected schema.
-        
-        Args:
-            user_query (str): The user's question.
-            schema_info (Dict): Mapping of table names to column details.
-            
-        Returns:
-            str: The generated SQL query.
+        Generates SQL query based on schema and query.
         """
-        # Format schema context
         schema_context = ""
         for table, columns in schema_info.items():
             col_list = ", ".join([col['name'] for col in columns])
             schema_context += f"Table: {table}\nColumns: {col_list}\n\n"
-            # Add descriptions if needed for better context
             for col in columns:
                 schema_context += f"  - {col['name']}: {col.get('description', '')[:50]}...\n"
                 
@@ -38,6 +30,5 @@ class SQLGenerationAgent(BaseAgent):
         
         response = self.get_llm_response(prompt, temperature=0.0)
         
-        # Clean response
         sql = response.replace('```sql', '').replace('```', '').strip()
         return sql

@@ -6,50 +6,44 @@ import traceback
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.embeddings.gemini import GeminiEmbedding
-from src.vector_store.qdrant_store import QdrantStore
-from qdrant_client import QdrantClient
+from src.vector_store.faiss_store import FaissStore
 
 def test_search():
-    print("--- Testing Vector Search ---")
+    print("--- Testing Vector Search (FAISS) ---")
     
     try:
         embedding_service = GeminiEmbedding()
         
-        # Shared Client setup
-        # Note: We need to point to the correct DB path relative to execution or absolute
-        # Given we run from root, 'qdrant_db' is in root.
-        db_path = os.path.abspath("qdrant_db")
-        shared_client = QdrantClient(path=db_path)
-        
         # 1. Search Columns in Amazon Sale Report
         print("\nSearching for 'shipped' in Amazon Sale Report columns...")
-        query_vec = embedding_service.generate_embedding("shipped")
         
-        column_store_amazon = QdrantStore(collection_name='columns_amazon_sale_report', client=shared_client)
-        results = column_store_amazon.search_vectors(query_vec, limit=2)
+        # Note: Index names must match ingest_vectors.py
+        column_store_amazon = FaissStore(index_name='columns_amazon_sale_report', embedding_function=embedding_service, folder_path="faiss_db")
+        results = column_store_amazon.search_similarity("shipped", k=2)
+        
         for res in results:
             payload = res['payload']
-            print(f"- {payload['column_name']} (Score: {res['score']:.4f})")
+            print(f"- {payload['column_name']} (Distance: {res['score']:.4f})")
 
         # 2. Search Columns in International Sale Report
         print("\nSearching for 'gross amount' in International Sale Report columns...")
-        query_vec_intl = embedding_service.generate_embedding("gross amount")
         
-        column_store_intl = QdrantStore(collection_name='columns_international_sale_report', client=shared_client)
-        results = column_store_intl.search_vectors(query_vec_intl, limit=2)
+        column_store_intl = FaissStore(index_name='columns_international_sale_report', embedding_function=embedding_service, folder_path="faiss_db")
+        results = column_store_intl.search_similarity("gross amount", k=2)
+        
         for res in results:
             payload = res['payload']
-            print(f"- {payload['column_name']} (Score: {res['score']:.4f})")
+            print(f"- {payload['column_name']} (Distance: {res['score']:.4f})")
 
         # 3. Search Tables
         print("\nSearching for 'inventory' in tables...")
-        query_vec_table = embedding_service.generate_embedding("inventory")
         
-        table_store = QdrantStore(collection_name='table_descriptions', client=shared_client)
-        results = table_store.search_vectors(query_vec_table, limit=2)
+        table_store = FaissStore(index_name='table_descriptions', embedding_function=embedding_service, folder_path="faiss_db")
+        results = table_store.search_similarity("inventory", k=2)
+        
         for res in results:
             payload = res['payload']
-            print(f"- {payload['table_name']} (Score: {res['score']:.4f})")
+            print(f"- {payload['table_name']} (Distance: {res['score']:.4f})")
             
     except Exception as e:
         print(f"An error occurred: {e}")

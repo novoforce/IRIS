@@ -4,6 +4,10 @@ Sales Dataset/Raw_data/
 Sales Dataset/Processed_data/
 *.csv
 
+# Generated Data / Databases
+faiss_db/
+*.db
+
 # Python
 __pycache__/
 *.py[cod]

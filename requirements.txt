@@ -3,8 +3,11 @@ matplotlib
 seaborn
 jupyter
 google-generativeai
+google-genai
 python-dotenv
 tabulate
-qdrant-client
-qdrant-client
 PyYAML
+google-adk
+pydantic
+langchain-community
+faiss-cpu

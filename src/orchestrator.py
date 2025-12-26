@@ -13,20 +13,18 @@ from src.agents.sql_generation.agent import SQLGenerationAgent
 from src.agents.sql_execution.agent import SQLExecutionAgent
 from src.agents.sql_regeneration.agent import SQLRegenerationAgent
 
-from qdrant_client import QdrantClient
+# Inherit from CustomBaseAgent
+from src.agents.base_agent import CustomBaseAgent
 
-class Orchestrator:
+class Orchestrator(CustomBaseAgent):
     def __init__(self):
+        super().__init__(agent_name="orchestrator")
         print("Initializing Orchestrator and Agents...")
         
-        # Shared Resources
-        db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../qdrant_db'))
-        self.shared_client = QdrantClient(path=db_path)
-        
-        # Initialize Agents
+        # Initialize Agents (Agents now handle their own FAISS connections)
         self.entity_agent = EntityExtractionAgent()
-        self.table_agent = TableSelectionAgent(shared_client=self.shared_client)
-        self.column_agent = ColumnSelectionAgent(shared_client=self.shared_client)
+        self.table_agent = TableSelectionAgent()
+        self.column_agent = ColumnSelectionAgent()
         self.sql_gen_agent = SQLGenerationAgent()
         self.sql_exec_agent = SQLExecutionAgent()
         self.sql_regen_agent = SQLRegenerationAgent()
@@ -74,17 +72,13 @@ class Orchestrator:
         
         if not schema_info:
              print("  No specific columns match high threshold. Providing table info context.")
-             # Fallback: provide at least the table names if no columns matched strictly
-             # Ideally, we should fetch all columns for the table, but for now we might assume the agent can handle it 
-             # or we rely on the schema context formatting to handle empty column lists if helpful.
-             # Let's enforce finding *something* or fail? 
-             # Actually, let's keep it as is, SQL Gen might fail or hallucinate if empty.
+             # Fallback
              pass
              
         print(f"  Schema Info: {list(schema_info.keys())}")
         
         # Mapping Table Helper
-        # Maps Qdrant Entity Names (Folder Names) to SQLite Table Names
+        # Maps Entity Names to SQLite Table Names (Manual Fix for now)
         TABLE_MAPPING = {
             "Amazon Sale Report": "amazon_sales",
             "International Sale Report": "international_sales",
@@ -140,17 +134,8 @@ class Orchestrator:
             "latency": end_time - start_time,
             "logs": logs
         }
-
+    
 if __name__ == "__main__":
-    # Test Run
     orchestrator = Orchestrator()
-    
-    # Test 1: Simple Count
-    query1 = "How many records are there in the amazon sales report?"
-    res1 = orchestrator.run(query1)
-    print("\nResult:", res1['result'])
-    
-    # Test 2: Specific Data
-    query2 = "What is the total amount for orders shipped to Mumbai?"
-    res2 = orchestrator.run(query2)
-    print("\nResult:", res2['result'])
+    res = orchestrator.run("How many records are there in amazon sales report?")
+    print(res)

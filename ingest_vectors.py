@@ -1,37 +1,31 @@
 import os
 import glob
-import uuid
 import re
 from src.embeddings.gemini import GeminiEmbedding
-from src.vector_store.qdrant_store import QdrantStore
-from qdrant_client import QdrantClient
+from src.vector_store.faiss_store import FaissStore
 
 # Configuration
 PROCESSED_DATA_DIR = 'Sales Dataset/Processed_data'
-TABLE_COLLECTION = 'table_descriptions'
-
-def get_deterministic_uuid(name: str) -> str:
-    return str(uuid.uuid5(uuid.NAMESPACE_DNS, name))
+TABLE_COLLECTION_NAME = 'table_descriptions'
 
 def sanitize_collection_name(name: str) -> str:
-    """Sanitizes string to be a valid Qdrant collection name."""
-    # Replace non-alphanumeric characters with underscores and lowercase
+    """Sanitizes string to be a valid collection name (safe for filenames)."""
     return re.sub(r'[^a-zA-Z0-9]', '_', name).lower()
 
 def ingest_all_data():
-    print(f"--- Starting Full Ingestion ---")
+    print(f"--- Starting Full Ingestion (FAISS) ---")
     
     # Initialize Services
     embedding_service = GeminiEmbedding()
     
-    # Shared Client
-    db_path = os.path.abspath("qdrant_db")
-    shared_client = QdrantClient(path=db_path)
+    # Table Description Store
+    # We use one index for all table descriptions
+    table_store = FaissStore(
+        index_name=TABLE_COLLECTION_NAME, 
+        embedding_function=embedding_service,
+        folder_path="faiss_db" 
+    )
     
-    # Table Description Store (Shared for all tables)
-    table_store = QdrantStore(collection_name=TABLE_COLLECTION, client=shared_client)
-    
-    # Iterate through all subdirectories in Processed_data
     if not os.path.exists(PROCESSED_DATA_DIR):
         print(f"Directory not found: {PROCESSED_DATA_DIR}")
         return
@@ -51,34 +45,30 @@ def ingest_all_data():
             with open(table_desc_file, 'r', encoding='utf-8') as f:
                 content = f.read()
                 
-            # Generate Embedding
-            print(f"Generating embedding for table description...")
-            embedding = embedding_service.generate_embedding(content)
-            
-            # Upsert to 'table_descriptions' collection
-            metadata = {
-                "type": "table",
-                "table_name": table_name,
-                "content": content,
-                "source": table_desc_file
+            # Add to table_store
+            doc = {
+                'content': content,
+                'metadata': {
+                    "type": "table",
+                    "table_name": table_name,
+                    "source": table_desc_file
+                }
             }
-            
-            table_id = get_deterministic_uuid(f"{table_name}_desc")
-            table_store.upsert_vectors(
-                vectors=[embedding],
-                metadata=[metadata],
-                ids=[table_id]
-            )
-            print(f"Table description ingested into '{TABLE_COLLECTION}'.")
+            print(f"Ingesting table description for {table_name}...")
+            table_store.add_documents([doc])
         else:
             print(f"Warning: Table description file not found: {table_desc_file}")
 
         # 2. Process Column Descriptions
-        # Create a specific collection for this table's columns
-        # e.g., columns_amazon_sale_report
+        # Create/Load specific FAISS index for this table's columns
         safe_table_name = sanitize_collection_name(table_name)
-        column_collection_name = f"columns_{safe_table_name}"
-        column_store = QdrantStore(collection_name=column_collection_name, client=shared_client)
+        column_index_name = f"columns_{safe_table_name}"
+        
+        column_store = FaissStore(
+            index_name=column_index_name,
+            embedding_function=embedding_service,
+            folder_path="faiss_db"
+        )
         
         # Get all _desc.txt files except the table description
         all_files = glob.glob(os.path.join(table_dir, "*_desc.txt"))
@@ -90,10 +80,7 @@ def ingest_all_data():
             
         print(f"Found {len(column_files)} columns.")
         
-        column_texts = []
-        column_metadatas = []
-        column_ids = []
-        
+        column_docs = []
         for file_path in column_files:
             filename = os.path.basename(file_path)
             column_name = filename.replace('_desc.txt', '')
@@ -101,36 +88,23 @@ def ingest_all_data():
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
                 
-            column_texts.append(content)
-            column_metadatas.append({
-                "type": "column",
-                "table_name": table_name,
-                "column_name": column_name,
-                "content": content,
-                "source": file_path
+            column_docs.append({
+                'content': content,
+                'metadata': {
+                    "type": "column",
+                    "table_name": table_name,
+                    "column_name": column_name,
+                    "source": file_path
+                }
             })
-            column_ids.append(get_deterministic_uuid(f"{table_name}_{column_name}"))
-
-        # Batch Generate Embeddings
-        print(f"Generating embeddings for columns...")
-        try:
-            embeddings = embedding_service.generate_embeddings(column_texts)
             
-            if len(embeddings) != len(column_texts):
-                print(f"Error: Mismatch in embeddings count. Expected {len(column_texts)}, got {len(embeddings)}")
-                continue
+        # Batch add columns
+        if column_docs:
+            print(f"Ingesting {len(column_docs)} columns into '{column_index_name}'...")
+            column_store.add_documents(column_docs)
+            print(f"Completed columns for {table_name}")
 
-            # Upsert to specific column collection
-            print(f"Upserting to collection: {column_collection_name}")
-            column_store.upsert_vectors(
-                vectors=embeddings,
-                metadata=column_metadatas,
-                ids=column_ids
-            )
-            print(f"Successfully ingested columns for {table_name}.")
-            
-        except Exception as e:
-            print(f"Error processing columns for {table_name}: {e}")
+    print("\n--- Ingestion Complete ---")
 
 if __name__ == "__main__":
     ingest_all_data()

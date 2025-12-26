@@ -5,50 +5,41 @@ from typing import List
 # Add project root to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 
-from src.agents.base_agent import BaseAgent
+# Use CustomBaseAgent for non-LLM logic agents
+from src.agents.base_agent import CustomBaseAgent
 from src.embeddings.gemini import GeminiEmbedding
-from src.vector_store.qdrant_store import QdrantStore
-from qdrant_client import QdrantClient
+from src.vector_store.faiss_store import FaissStore
 
-class TableSelectionAgent(BaseAgent):
-    def __init__(self, shared_client: QdrantClient = None):
+class TableSelectionAgent(CustomBaseAgent):
+    def __init__(self):
         super().__init__(agent_name="table_selection")
         self.embedding_service = GeminiEmbedding()
         
-        # Qdrant Setup
+        # FAISS Setup
         collection_name = self.config.get('table_collection', 'table_descriptions')
-        
-        if shared_client:
-            self.store = QdrantStore(collection_name=collection_name, client=shared_client)
-        else:
-            # Fallback to local path if no shared client (though Orchestrator should provide it)
-            db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../qdrant_db'))
-            self.store = QdrantStore(collection_name=collection_name, host=db_path)
+        self.store = FaissStore(index_name=collection_name, embedding_function=self.embedding_service, folder_path="faiss_db")
 
     def execute(self, entities: List[str]) -> List[str]:
         """
         Selects relevant tables based on extracted entities.
-        
-        Args:
-            entities (List[str]): List of entity terms to search for.
-            
-        Returns:
-            List[str]: List of unique table names.
         """
         relevant_tables = set()
         top_k = self.config.get('top_k', 3)
-        threshold = self.config.get('similarity_threshold', 0.65)
+        # FAISS L2: Lower is better. 0 = identical.
+        # We'll use a distance threshold. Large distance = bad match.
+        distance_threshold = self.config.get('distance_threshold', 1.0) 
         
         print(f"TableSelection: Searching for {entities}")
         
         for entity in entities:
-            query_vec = self.embedding_service.generate_embedding(entity)
-            results = self.store.search_vectors(query_vec, limit=top_k)
+            # FAISS Store handles embedding internally via LangChain wrapper
+            results = self.store.search_similarity(entity, k=top_k)
             
             for res in results:
-                if res['score'] >= threshold:
+                # res has 'score' which is L2 distance
+                if res['score'] <= distance_threshold:
                     table_name = res['payload']['table_name']
                     relevant_tables.add(table_name)
-                    print(f"  - Found table: {table_name} (Score: {res['score']:.4f})")
+                    print(f"  - Found table: {table_name} (Distance: {res['score']:.4f})")
                     
         return list(relevant_tables)

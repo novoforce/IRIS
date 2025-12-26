@@ -5,10 +5,11 @@ from typing import List, Dict, Any, Union
 # Add project root to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 
-from src.agents.base_agent import BaseAgent
+# CustomBaseAgent (No LLM)
+from src.agents.base_agent import CustomBaseAgent
 from src.database.sqlite_client import SQLiteClient
 
-class SQLExecutionAgent(BaseAgent):
+class SQLExecutionAgent(CustomBaseAgent):
     def __init__(self):
         super().__init__(agent_name="sql_execution")
         # Initialize DB Client
@@ -19,12 +20,6 @@ class SQLExecutionAgent(BaseAgent):
     def execute(self, sql_query: str) -> Union[List[Dict[str, Any]], str]:
         """
         Executes the SQL query.
-        
-        Args:
-            sql_query (str): The SQL query to execute.
-            
-        Returns:
-            Union[List[Dict], str]: Query results or error message.
         """
         print(f"SQLExecution: Executing query: {sql_query}")
         try:
