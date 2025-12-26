@@ -4,7 +4,7 @@ import time
 import traceback
 
 # Add project root to path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'src')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 
 from src.orchestrator import Orchestrator
 
