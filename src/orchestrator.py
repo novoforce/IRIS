@@ -11,7 +11,14 @@ from src.agents.table_selection.agent import TableSelectionAgent
 from src.agents.column_selection.agent import ColumnSelectionAgent
 from src.agents.sql_generation.agent import SQLGenerationAgent
 from src.agents.sql_execution.agent import SQLExecutionAgent
+from src.agents.sql_execution.agent import SQLExecutionAgent
 from src.agents.sql_regeneration.agent import SQLRegenerationAgent
+
+# Memory Service
+from src.memory.service import MemoryManager
+from google.adk.sessions import Session
+from google.genai.types import Content, Part
+import uuid
 
 # Inherit from CustomBaseAgent
 from src.agents.base_agent import CustomBaseAgent
@@ -29,21 +36,73 @@ class Orchestrator(CustomBaseAgent):
         self.sql_exec_agent = SQLExecutionAgent()
         self.sql_regen_agent = SQLRegenerationAgent()
         
-        print("Agents initialized.")
+        # Initialize Memory Manager
+        self.memory_manager = MemoryManager()
+        self.app_name = "iris_retail_app"
+        self.user_id = "default_user" # Simplified for single user demo
 
-    def run(self, user_query: str) -> Dict[str, Any]:
+        print("Agents and Memory Services initialized.")
+
+    async def run(self, user_query: str, session_id: str = None) -> Dict[str, Any]:
         """
-        Runs the full Text-to-SQL pipeline.
+        Runs the full Text-to-SQL pipeline (Async).
         """
         start_time = time.time()
         logs = []
         
+        # --- Memory Integration Start ---
+        # 1. Manage Session
+        if not session_id:
+            session_id = str(uuid.uuid4())
+            await self.memory_manager.create_session(self.app_name, self.user_id, session_id)
+            current_session = None
+        else:
+            # Try to retrieve existing session
+            current_session = await self.memory_manager.get_session(self.app_name, self.user_id, session_id)
+            if not current_session:
+                # Re-create if missing (e.g. server restart)
+                await self.memory_manager.create_session(self.app_name, self.user_id, session_id)
+                current_session = await self.memory_manager.get_session(self.app_name, self.user_id, session_id)
+
+        # 2. Retrieve History
+        history_context = ""
+        print(f"DEBUG: Session Type: {type(current_session)}")
+        print(f"DEBUG: Session Dir: {dir(current_session)}")
+        
+        # Check if it has 'turns' or 'messages'
+        # ADK Varies on version. Let's try to adapt.
+        turns = getattr(current_session, 'turns', [])
+        if not turns:
+             turns = getattr(current_session, 'messages', [])
+
+        if turns:
+            # Simple history construction: Last 3 turns
+            recent_turns = turns[-3:]
+            history_text = []
+            for turn in recent_turns:
+                 role_label = "User" if turn.role == "user" else "Assistant"
+                 text_content = turn.parts[0].text if turn.parts else ""
+                 history_text.append(f"{role_label}: {text_content}")
+            
+            if history_text:
+                history_context = "\n".join(history_text)
+                print(f"  Retrieved History Context ({len(recent_turns)} turns).")
+
+        # 3. Enrich Query for Entity Agent
+        # We pass context + query so it can resolve coreferences (e.g. "it", "that", "Mumbai")
+        if history_context:
+            enriched_query_prompt = f"Previous Conversation:\n{history_context}\n\nCurrent Query: {user_query}"
+        else:
+            enriched_query_prompt = user_query
+        # --- Memory Integration End ---
+
         print(f"\n--- Processing Query: {user_query} ---")
         logs.append(f"Query: {user_query}")
         
         # 1. Entity Extraction
         print("Step 1: Extracting Entities...")
-        extraction_result = self.entity_agent.execute(user_query)
+        # Pass enriched prompt to agent
+        extraction_result = self.entity_agent.execute(enriched_query_prompt)
         entities = extraction_result.get('entities', [])
         attributes = extraction_result.get('attributes', [])
         print(f"  Reasoning: {extraction_result.get('reason', 'N/A')}")
@@ -140,8 +199,29 @@ class Orchestrator(CustomBaseAgent):
             "logs": logs,
             "sql_reasoning": sql_result.get('reason', 'N/A')
         }
+
+        # --- Memory Integration: Save Session ---
+        # Construct a session object with user query and system response
+        session = await self.memory_manager.get_session(self.app_name, self.user_id, session_id)
+        
+        # Add User Turn
+        user_turn = Content(parts=[Part(text=user_query)], role="user")
+        # Add Model Turn (Summary of what happened)
+        model_text = f"Executed SQL: {sql_query}. Result: {str(execution_result)}"
+        model_turn = Content(parts=[Part(text=model_text)], role="model")
+        
+        # We manually update the session turns since we aren't using the ADK Runner loop fully yet
+        if session:
+            session.turns.append(user_turn)
+            session.turns.append(model_turn)
+            await self.memory_manager.save_session_to_memory(session)
+            print("  Session saved to InMemory Memory Service.")
+            
+        return result_dict
     
 if __name__ == "__main__":
+    import asyncio
     orchestrator = Orchestrator()
-    res = orchestrator.run("How many records are there in amazon sales report?")
+    # Test Async Run
+    res = asyncio.run(orchestrator.run("How many records are there in amazon sales report?"))
     print(res)

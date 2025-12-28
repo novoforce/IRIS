@@ -28,6 +28,7 @@ print("Orchestrator Ready.")
 
 class QueryRequest(BaseModel):
     query: str
+    session_id: str | None = None
 
 class QueryResponse(BaseModel):
     query: str
@@ -45,9 +46,8 @@ def health_check():
 async def process_query(request: QueryRequest):
     try:
         # Run the orchestrator
-        # Note: Orchestrator.run is synchronous for now. 
-        # In a high-concurrency setting, we might want to run this in a threadpool if it blocks too long.
-        response = orchestrator.run(request.query)
+        # Orchestrator.run is now async to support ADK memory operations.
+        response = await orchestrator.run(request.query, request.session_id)
         
         return QueryResponse(
             query=response.get("query"),

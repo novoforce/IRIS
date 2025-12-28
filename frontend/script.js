@@ -4,6 +4,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatHistory = document.getElementById('chat-history');
     const themeToggle = document.getElementById('theme-toggle');
 
+    // Generate or retrieve Session ID
+    let sessionId = localStorage.getItem('chat_session_id');
+    if (!sessionId) {
+        sessionId = crypto.randomUUID();
+        localStorage.setItem('chat_session_id', sessionId);
+    }
+
     // Theme Toggle Logic
     const savedTheme = localStorage.getItem('theme') || 'dark';
     document.documentElement.setAttribute('data-theme', savedTheme);
@@ -38,7 +45,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ query: query })
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    query: query,
+                    session_id: sessionId
+                })
             });
 
             if (!response.ok) {
