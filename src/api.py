@@ -1,0 +1,61 @@
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+import sys
+import os
+
+# Add project root to path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from src.orchestrator import Orchestrator
+
+app = FastAPI(title="IRIS API", description="Backend for Intelligent Retail Insights System")
+
+# CORS Middleware to allow frontend access
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, specify exact origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Initialize Orchestrator (Global instance)
+# We load it continuously to keep FAISS indices in memory
+print("Initializing Orchestrator...")
+orchestrator = Orchestrator()
+print("Orchestrator Ready.")
+
+class QueryRequest(BaseModel):
+    query: str
+
+class QueryResponse(BaseModel):
+    query: str
+    sql: str
+    result: list | dict | str | None
+    latency: float
+    logs: list[str]
+
+@app.get("/")
+def health_check():
+    return {"status": "ok", "service": "IRIS Backend"}
+
+@app.post("/query", response_model=QueryResponse)
+async def process_query(request: QueryRequest):
+    try:
+        # Run the orchestrator
+        # Note: Orchestrator.run is synchronous for now. 
+        # In a high-concurrency setting, we might want to run this in a threadpool if it blocks too long.
+        response = orchestrator.run(request.query)
+        
+        return QueryResponse(
+            query=response.get("query"),
+            sql=response.get("sql", ""),
+            result=response.get("result"),
+            latency=response.get("latency", 0.0),
+            logs=response.get("logs", [])
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
