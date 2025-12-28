@@ -36,6 +36,7 @@ def test_api():
         print("Query Success!")
         print(f"Query: {data['query']}")
         print(f"SQL: {data['sql']}")
+        print(f"Reasoning: {data.get('sql_reasoning', 'N/A')}")
         print(f"Result: {data['result']}")
         if data['logs']:
              print("Logs present.")

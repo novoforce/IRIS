@@ -137,7 +137,8 @@ class Orchestrator(CustomBaseAgent):
             "sql": sql_query,
             "result": execution_result,
             "latency": end_time - start_time,
-            "logs": logs
+            "logs": logs,
+            "sql_reasoning": sql_result.get('reason', 'N/A')
         }
     
 if __name__ == "__main__":

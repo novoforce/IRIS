@@ -35,6 +35,7 @@ class QueryResponse(BaseModel):
     result: list | dict | str | None
     latency: float
     logs: list[str]
+    sql_reasoning: str | None = None
 
 @app.get("/")
 def health_check():
@@ -53,7 +54,8 @@ async def process_query(request: QueryRequest):
             sql=response.get("sql", ""),
             result=response.get("result"),
             latency=response.get("latency", 0.0),
-            logs=response.get("logs", [])
+            logs=response.get("logs", []),
+            sql_reasoning=response.get("sql_reasoning")
         )
     except Exception as e:
         import traceback

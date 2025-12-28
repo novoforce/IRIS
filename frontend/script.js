@@ -2,6 +2,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatForm = document.getElementById('chat-form');
     const userInput = document.getElementById('user-input');
     const chatHistory = document.getElementById('chat-history');
+    const themeToggle = document.getElementById('theme-toggle');
+
+    // Theme Toggle Logic
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+
+    themeToggle.addEventListener('click', () => {
+        const currentTheme = document.documentElement.getAttribute('data-theme');
+        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', newTheme);
+        localStorage.setItem('theme', newTheme);
+    });
 
     // Focus input on load
     userInput.focus();
@@ -97,6 +109,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (Array.isArray(data.result) && data.result.length > 0) {
             // Simple Table for array results
             html += generateTableHtml(data.result);
+            // Append button placeholder
+            html += `<button class="download-btn" id="dl-btn-${Date.now()}">⬇ Download CSV</button>`;
         } else {
             html += `<pre style="background:rgba(0,0,0,0.2);padding:10px;border-radius:6px;overflow-x:auto;">${resultString}</pre>`;
         }
@@ -106,6 +120,16 @@ document.addEventListener('DOMContentLoaded', () => {
             html += `<div class="sql-badge">SQL: ${data.sql}</div>`;
         }
 
+        // SQL Reasoning (Dropdown)
+        if (data.sql_reasoning) {
+            html += `
+                <details class="reasoning-details">
+                    <summary class="reasoning-summary">Show Reasoning</summary>
+                    <div class="reasoning-content">${data.sql_reasoning}</div>
+                </details>
+            `;
+        }
+
         // Latency
         if (data.latency) {
             html += `<div style="font-size:0.75rem;color:#888;margin-top:5px;">Time: ${data.latency.toFixed(2)}s</div>`;
@@ -113,33 +137,75 @@ document.addEventListener('DOMContentLoaded', () => {
 
         contentDiv.innerHTML = html;
         msgDiv.appendChild(contentDiv);
+        contentDiv.innerHTML = html;
+        msgDiv.appendChild(contentDiv);
         chatHistory.appendChild(msgDiv);
+
+        // Attach Event Listeners (e.g., Download Button)
+        const dlBtn = msgDiv.querySelector('.download-btn');
+        if (dlBtn && Array.isArray(data.result)) {
+            dlBtn.addEventListener('click', () => {
+                downloadCSV(data.result, `iris_data_${Date.now()}.csv`);
+            });
+        }
+
         scrollToBottom();
+    }
+
+    function downloadCSV(dataArray, filename) {
+        if (!dataArray || !dataArray.length) return;
+
+        const headers = Object.keys(dataArray[0]);
+        const csvRows = [];
+
+        // Header
+        csvRows.push(headers.join(','));
+
+        // Rows
+        for (const row of dataArray) {
+            const values = headers.map(header => {
+                const escaped = ('' + row[header]).replace(/"/g, '\\"');
+                return `"${escaped}"`;
+            });
+            csvRows.push(values.join(','));
+        }
+
+        const csvString = csvRows.join('\n');
+        const blob = new Blob([csvString], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.setAttribute('hidden', '');
+        a.setAttribute('href', url);
+        a.setAttribute('download', filename);
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
     }
 
     function generateTableHtml(dataArray) {
         if (!dataArray || dataArray.length === 0) return '';
         const headers = Object.keys(dataArray[0]);
 
-        let table = '<table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:0.9rem;">';
+        let table = '<div class="table-container"><table>';
 
         // Header
-        table += '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.2);">';
+        table += '<thead><tr>';
         headers.forEach(h => {
-            table += `<th style="text-align:left;padding:8px;color:#a1a1aa;">${h}</th>`;
+            // Basic formatting for headers
+            table += `<th>${h}</th>`;
         });
         table += '</tr></thead>';
 
         // Body
         table += '<tbody>';
         dataArray.forEach(row => {
-            table += '<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">';
+            table += '<tr>';
             headers.forEach(h => {
-                table += `<td style="padding:8px;">${row[h]}</td>`;
+                table += `<td>${row[h]}</td>`;
             });
             table += '</tr>';
         });
-        table += '</tbody></table>';
+        table += '</tbody></table></div>';
         return table;
     }
 
