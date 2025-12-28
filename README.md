@@ -155,3 +155,34 @@ app = Orchestrator()
 result = app.run("How many orders were shipped to Mumbai?")
 print(result)
 ```
+
+## 6. How to Run the Web Application
+
+### Step 1: Start the Backend Server
+The backend is a **FastAPI** application that serves the Orchestrator via REST.
+
+1.  Open a terminal in the project root (`D:\IRIS`).
+2.  Activate the environment:
+    ```bash
+    conda activate iris
+    ```
+3.  Run the Uvicorn server:
+    ```bash
+    uvicorn src.api:app --port 8000 --reload
+    ```
+    *Wait until you see "Application startup complete" and "Orchestrator Ready" in the logs.*
+
+### Step 2: Launch the Frontend
+The frontend is a standalone HTML/JS application (Vanilla).
+
+1.  Navigate to the `frontend/` directory.
+2.  Simply double-click **`index.html`** to open it in your default web browser.
+    *   *Alternatively, you can serve it with a lightweight server like `python -m http.server 8080`, but opening the file directly works too.*
+
+### Step 3: Use the Assistant
+1.  Type a query (e.g., *"Show me the top 5 amazon orders"*).
+2.  Click **Send**.
+3.  View the results in the chat interface:
+    *   **Table**: Data results.
+    *   **Dropdown**: Click "Show Reasoning" to see the logic.
+    *   **Download**: Click "Download CSV" to save the data.
