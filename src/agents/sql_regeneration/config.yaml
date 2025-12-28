@@ -11,6 +11,8 @@ prompt_template: |
   {schema_context}
   
   Rules:
-  1. Return ONLY the corrected SQL query. No markdown, no 'sql' prefix.
-  2. Analyze the error carefully (e.g., 'no such table', 'no such column').
-  3. Ensure table and column names match the schema context exactly.
+  1. Analyze the error carefully (e.g., 'no such table', 'no such column').
+  2. Ensure table and column names match the schema context exactly.
+  3. Provide a reasoning for your correction.
+
+  Use the provided schema to structure your response.

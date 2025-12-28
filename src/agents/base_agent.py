@@ -45,15 +45,36 @@ class BaseAgentWrapper:
             self._model_name = self._config.get('llm_model', 'gemini-1.5-flash-latest') # Updated model name format often preferred in v2? or just use full resource name.
             # Using standard model names.
 
-    def get_llm_response(self, prompt: str, temperature: float = 0.0) -> str:
+    def get_llm_response(self, prompt: str, temperature: float = 0.0, response_schema: Any = None) -> Any:
         """Generates a response from the LLM (v2)."""
+        generation_config = types.GenerateContentConfig(
+            temperature=temperature
+        )
+        
+        if response_schema:
+            generation_config.response_mime_type = "application/json"
+            generation_config.response_schema = response_schema
+
         response = self._client.models.generate_content(
             model=self._model_name,
             contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=temperature
-            )
+            config=generation_config
         )
+        
+        if response_schema:
+            # If schema is provided, response.text is a JSON string.
+            # Using parsed (if available) or manual load might be needed depending on SDK version.
+            # safe assumption: usage of json.loads if not automatically parsed.
+            import json
+            try:
+                # With v2 SDK, it should return a JSON string in .text
+                # Sometimes .parsed is available if typed dict is used?
+                # For safety, let's try to return parsed object if schema was requested.
+                return json.loads(response.text)
+            except Exception as e:
+                print(f"Error parsing structured response: {e}, text: {response.text}")
+                return response.text
+                
         return response.text
 
 class CustomLlmAgent(LlmAgent, BaseAgentWrapper):

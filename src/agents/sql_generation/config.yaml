@@ -9,7 +9,9 @@ prompt_template: |
   {schema_context}
   
   Rules:
-  1. Return ONLY the raw SQL query. No markdown formatting, no 'sql' prefix.
-  2. Use 'LIKE' for text matching if not sure about exact values.
-  3. Use 'LIMIT' if the user asks for "top" or "sample".
-  4. Ensure all column names and table names are correct as per schema.
+  1. Use 'LIKE' for text matching if not sure about exact values.
+  2. Use 'LIMIT' if the user asks for "top" or "sample".
+  3. Ensure all column names and table names are correct as per schema.
+  4. Provide a reasoning for your query construction.
+
+  Use the provided schema to structure your response.

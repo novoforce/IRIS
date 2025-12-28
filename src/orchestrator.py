@@ -46,6 +46,7 @@ class Orchestrator(CustomBaseAgent):
         extraction_result = self.entity_agent.execute(user_query)
         entities = extraction_result.get('entities', [])
         attributes = extraction_result.get('attributes', [])
+        print(f"  Reasoning: {extraction_result.get('reason', 'N/A')}")
         
         # Fallback: if no entities found, use the whole query as a search term
         if not entities:
@@ -99,8 +100,10 @@ class Orchestrator(CustomBaseAgent):
             mapped_schema_info[sql_table_name] = columns
             print(f"  Mapping '{original_table}' -> '{sql_table_name}'")
             
-        sql_query = self.sql_gen_agent.execute(user_query, mapped_schema_info)
+        sql_result = self.sql_gen_agent.execute(user_query, mapped_schema_info)
+        sql_query = sql_result['sql_query']
         print(f"  Generated SQL: {sql_query}")
+        print(f"  Reasoning: {sql_result.get('reason', 'N/A')}")
         logs.append(f"Generated SQL: {sql_query}")
         
         # 5. SQL Execution
@@ -113,13 +116,15 @@ class Orchestrator(CustomBaseAgent):
             print("Step 6: Attempting Regeneration...")
             logs.append(f"Execution Error: {execution_result}")
             
-            new_sql_query = self.sql_regen_agent.execute(
+            new_sql_result = self.sql_regen_agent.execute(
                 user_query=user_query,
                 old_sql=sql_query,
                 error_message=execution_result,
                 schema_info=mapped_schema_info
             )
+            new_sql_query = new_sql_result['sql_query']
             print(f"  Regenerated SQL: {new_sql_query}")
+            print(f"  Reasoning: {new_sql_result.get('reason', 'N/A')}")
             logs.append(f"Regenerated SQL: {new_sql_query}")
             
             # Retry Execution

@@ -8,7 +8,6 @@ prompt_template: |
   Extract the following:
   1. Main Entities (likely table names or major topics)
   2. Specific Attributes (likely column names or metrics)
-  3. Timeframes (if any)
+  3. A short reason explaining why these entities were chosen.
 
-  Return the result as a JSON object with keys: "entities", "attributes", "timeframe".
-  Do not include any other text or markdown formatting. Just the raw JSON string.
+  Use the provided schema to structure your response.
