@@ -61,3 +61,111 @@ async def process_query(request: QueryRequest):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/sessions")
+async def list_sessions():
+    """Returns a list of all sessions for the default user."""
+    try:
+        sessions = await orchestrator.memory_manager.list_sessions(
+            orchestrator.app_name, 
+            orchestrator.user_id
+        )
+        
+        if sessions is None:
+            return []
+            
+        # Format for frontend with fallbacks for s.id vs s.session_id
+        results = []
+        for s in sessions:
+            # ADK Session doc says 'id' is the unique identifier.
+            s_id = getattr(s, 'id', getattr(s, 'session_id', "unknown"))
+            
+            # Use 'last_update_time' from docs, or fallbacks
+            created_at = "N/A"
+            for time_field in ['last_update_time', 'created_time', 'created_at', 'lastUpdateTime']:
+                if hasattr(s, time_field):
+                    val = getattr(s, time_field)
+                    if val:
+                        created_at = str(val)
+                        break
+            
+            # Add a title for the UI (can be first part of ID or a placeholder)
+            title = f"Chat {s_id[:8]}" if len(s_id) > 8 else f"Chat {s_id}"
+            
+            results.append({
+                "id": s_id, 
+                "session_id": s_id, # for compatibility
+                "created_at": created_at,
+                "title": title
+            })
+            
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/sessions/{session_id}")
+async def get_session_history(session_id: str):
+    """Returns the history of a specific session."""
+    try:
+        session = await orchestrator.memory_manager.get_session(
+            orchestrator.app_name, 
+            orchestrator.user_id, 
+            session_id
+        )
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        # Convert history to simplified format
+        # Handle 'history', 'turns', 'messages', or 'events'
+        turns = []
+        for field in ['history', 'turns', 'messages', 'events']:
+            if hasattr(session, field):
+                attr = getattr(session, field)
+                if isinstance(attr, list) and len(attr) > 0:
+                    turns = attr
+                    break
+        
+        history = []
+        for turn in turns:
+            try:
+                # If wrapped in SessionEvent, unwrap it
+                turn_data = turn
+                if hasattr(turn, 'content') and hasattr(turn.content, 'parts'):
+                    turn_data = turn.content
+                
+                # Determine role (check both turn and turn_data)
+                role_val = getattr(turn_data, 'role', getattr(turn, 'role', 'user'))
+                role = "user" if role_val == "user" else "bot"
+                
+                text = ""
+                if hasattr(turn_data, 'parts') and turn_data.parts:
+                    text = turn_data.parts[0].text
+                elif hasattr(turn_data, 'content'):
+                    text = str(turn_data.content)
+                
+                if text:
+                    history.append({"role": role, "content": text})
+            except Exception as e:
+                print(f"Error parsing turn: {e}")
+                continue
+            
+        return history
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/sessions")
+async def create_new_session():
+    """Creates a new session explicitly."""
+    import uuid
+    new_id = str(uuid.uuid4())
+    # Just return the ID, orchestrator creates it on use if needed, 
+    # but we can pre-create to be safe.
+    await orchestrator.memory_manager.create_session(
+         orchestrator.app_name, 
+         orchestrator.user_id, 
+         new_id
+    )
+    return {"session_id": new_id}
+

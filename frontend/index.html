@@ -10,6 +10,13 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <style>
+        .container {
+            flex-direction: column;
+        }
+
+        /* Moved rest to style.css */
+    </style>
 </head>
 
 <body>
@@ -19,7 +26,8 @@
         <!-- Header -->
         <header>
             <div class="logo">
-                <span class="logo-icon">✨</span>
+                <button id="sidebar-toggle" class="sidebar-toggle" title="Toggle History">☰</button>
+                <span class="logo-icon" style="margin-left: 30px;">✨</span>
                 <h1>IRIS</h1>
             </div>
             <div class="header-right">
@@ -34,37 +42,51 @@
             </div>
         </header>
 
-        <!-- Chat Area -->
-        <main class="chat-container">
-            <div id="chat-history" class="chat-history">
-                <!-- Welcome Message -->
-                <div class="message bot-message">
-                    <div class="message-content">
-                        Hello! I am IRIS, your Intelligent Retail Insights System.
-                        <br>Ask me anything about your sales data.
+        <div class="main-layout">
+            <!-- Sidebar -->
+            <aside class="sidebar" id="sidebar">
+                <div class="sidebar-header">
+                    <h2>History</h2>
+                    <button id="new-chat-btn" class="new-chat-btn-sidebar" title="New Chat">+</button>
+                </div>
+                <div id="session-list" class="session-list">
+                    <!-- Sessions will be loaded here -->
+                </div>
+            </aside>
+
+            <!-- Chat Content Wrapper -->
+            <main class="chat-container">
+                <div id="chat-history" class="chat-history">
+                    <!-- Welcome Message -->
+                    <div class="message bot-message">
+                        <div class="message-content">
+                            Hello! I am IRIS, your Intelligent Retail Insights System.
+                            <br>Ask me anything about your sales data.
+                        </div>
                     </div>
                 </div>
-            </div>
-        </main>
 
-        <!-- Input Area -->
-        <footer class="input-area">
-            <form id="chat-form">
-                <div class="input-wrapper">
-                    <input type="text" id="user-input" placeholder="Ask a question about your data..."
-                        autocomplete="off">
-                    <button type="submit" id="send-btn">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M22 2L11 13" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                stroke-linejoin="round" />
-                            <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" stroke-width="2"
-                                stroke-linecap="round" stroke-linejoin="round" />
-                        </svg>
-                    </button>
-                </div>
-            </form>
-        </footer>
-    </div>
+                <!-- Input Area -->
+                <footer class="input-area">
+                    <form id="chat-form">
+                        <div class="input-wrapper">
+                            <input type="text" id="user-input" placeholder="Ask a question about your data..."
+                                autocomplete="off">
+                            <button type="submit" id="send-btn">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                                    xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M22 2L11 13" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                        stroke-linejoin="round" />
+                                    <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" stroke-width="2"
+                                        stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                            </button>
+                        </div>
+                    </form>
+                </footer>
+            </main>
+        </div> <!-- End main-layout -->
+    </div> <!-- End container -->
 
     <script src="script.js"></script>
 </body>

@@ -20,6 +20,11 @@ from google.adk.sessions import Session
 from google.genai.types import Content, Part
 import uuid
 
+# Define a local wrapper since SessionEvent/Event might not be exported in this ADK version
+class SessionEvent:
+    def __init__(self, content):
+        self.content = content
+
 # Inherit from CustomBaseAgent
 from src.agents.base_agent import CustomBaseAgent
 
@@ -67,26 +72,50 @@ class Orchestrator(CustomBaseAgent):
         # 2. Retrieve History
         history_context = ""
         print(f"DEBUG: Session Type: {type(current_session)}")
-        print(f"DEBUG: Session Dir: {dir(current_session)}")
         
-        # Check if it has 'turns' or 'messages'
-        # ADK Varies on version. Let's try to adapt.
-        turns = getattr(current_session, 'turns', [])
+        # Check for history field (history, turns, messages, or events)
+        turns = []
+        # Documentation says 'events' is the standard history field
+        for field in ['events', 'history', 'turns', 'messages']:
+            if hasattr(current_session, field):
+                attr = getattr(current_session, field)
+                if isinstance(attr, list) and len(attr) > 0:
+                    turns = attr
+                    print(f"DEBUG: Using '{field}' field for history retrieval")
+                    break
+        
         if not turns:
-             turns = getattr(current_session, 'messages', [])
+             print("DEBUG: NO HISTORY DATA FOUND IN SESSION")
 
         if turns:
-            # Simple history construction: Last 3 turns
-            recent_turns = turns[-3:]
+            # Simple history construction: Last 5 turns
+            recent_turns = turns[-5:]
             history_text = []
             for turn in recent_turns:
-                 role_label = "User" if turn.role == "user" else "Assistant"
-                 text_content = turn.parts[0].text if turn.parts else ""
-                 history_text.append(f"{role_label}: {text_content}")
+                 try:
+                     # If wrapped in SessionEvent, unwrap it
+                     turn_data = turn
+                     if hasattr(turn, 'content') and hasattr(turn.content, 'parts'):
+                         turn_data = turn.content
+
+                     role_val = getattr(turn_data, 'role', getattr(turn, 'role', 'user'))
+                     role_label = "User" if role_val == "user" else "Assistant"
+                     
+                     text_content = ""
+                     if hasattr(turn_data, 'parts') and turn_data.parts:
+                         text_content = turn_data.parts[0].text
+                     elif hasattr(turn_data, 'content'):
+                         text_content = str(turn_data.content)
+                     
+                     if text_content:
+                        history_text.append(f"{role_label}: {text_content}")
+                 except Exception as e:
+                     print(f"DEBUG: Error parsing history turn: {e}")
+                     continue
             
             if history_text:
                 history_context = "\n".join(history_text)
-                print(f"  Retrieved History Context ({len(recent_turns)} turns).")
+                print(f"  Retrieved History Context ({len(history_text)} messages).")
 
         # 3. Enrich Query for Entity Agent
         # We pass context + query so it can resolve coreferences (e.g. "it", "that", "Mumbai")
@@ -191,6 +220,24 @@ class Orchestrator(CustomBaseAgent):
         
         end_time = time.time()
         
+        # --- Memory Integration: Save Session ---
+        # Add User Turn
+        user_turn = Content(parts=[Part(text=user_query)], role="user")
+        # Add Model Turn (Summary of what happened)
+        model_text = f"Executed SQL: {sql_query}. Result: {str(execution_result)}"
+        model_turn = Content(parts=[Part(text=model_text)], role="model")
+        
+        session = await self.memory_manager.get_session(self.app_name, self.user_id, session_id)
+        if session:
+            print("DEBUG: Appending events to session via service...")
+            try:
+                # Use the service's append_event logic for persistence
+                await self.memory_manager.append_event(session, SessionEvent(content=user_turn))
+                await self.memory_manager.append_event(session, SessionEvent(content=model_turn))
+                print("  Session events appended and saved to Database.")
+            except Exception as e:
+                print(f"  WARNING: Failed to append events to session: {e}")
+            
         return {
             "query": user_query,
             "sql": sql_query,
@@ -199,25 +246,6 @@ class Orchestrator(CustomBaseAgent):
             "logs": logs,
             "sql_reasoning": sql_result.get('reason', 'N/A')
         }
-
-        # --- Memory Integration: Save Session ---
-        # Construct a session object with user query and system response
-        session = await self.memory_manager.get_session(self.app_name, self.user_id, session_id)
-        
-        # Add User Turn
-        user_turn = Content(parts=[Part(text=user_query)], role="user")
-        # Add Model Turn (Summary of what happened)
-        model_text = f"Executed SQL: {sql_query}. Result: {str(execution_result)}"
-        model_turn = Content(parts=[Part(text=model_text)], role="model")
-        
-        # We manually update the session turns since we aren't using the ADK Runner loop fully yet
-        if session:
-            session.turns.append(user_turn)
-            session.turns.append(model_turn)
-            await self.memory_manager.save_session_to_memory(session)
-            print("  Session saved to InMemory Memory Service.")
-            
-        return result_dict
     
 if __name__ == "__main__":
     import asyncio

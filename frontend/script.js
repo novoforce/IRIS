@@ -3,12 +3,128 @@ document.addEventListener('DOMContentLoaded', () => {
     const userInput = document.getElementById('user-input');
     const chatHistory = document.getElementById('chat-history');
     const themeToggle = document.getElementById('theme-toggle');
+    const sessionList = document.getElementById('session-list');
+    const newChatBtn = document.getElementById('new-chat-btn');
 
     // Generate or retrieve Session ID
     let sessionId = localStorage.getItem('chat_session_id');
     if (!sessionId) {
+        startNewChat();
+    } else {
+        // If we have a session, try to load it (or just load list)
+        loadSessions();
+        // Note: We don't automatically load history to avoid jarring UX, 
+        // but we could. For now, we stick to current session logic.
+    }
+
+    // New Chat Button
+    newChatBtn.addEventListener('click', () => {
+        startNewChat();
+    });
+
+    const sidebar = document.getElementById('sidebar');
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+
+    sidebarToggle.addEventListener('click', () => {
+        sidebar.classList.toggle('collapsed');
+    });
+
+    async function startNewChat() {
         sessionId = crypto.randomUUID();
         localStorage.setItem('chat_session_id', sessionId);
+
+        // Clear UI
+        chatHistory.innerHTML = '';
+        appendBotResponse({ result: "Starting a new conversation..." }); // Temporary msg
+        setTimeout(() => {
+            chatHistory.innerHTML = `
+                <div class="message bot-message">
+                    <div class="message-content">
+                        Hello! I am IRIS, your Intelligent Retail Insights System.
+                        <br>Ask me anything about your sales data.
+                    </div>
+                </div>`;
+        }, 500);
+
+        // Ideally verify with backend or register session
+        try {
+            await fetch('http://localhost:8000/sessions', { method: 'POST' });
+        } catch (e) { console.error("Failed to register session", e); }
+
+        await loadSessions();
+        highlightSession(sessionId);
+    }
+
+    async function loadSessions() {
+        try {
+            const res = await fetch('http://localhost:8000/sessions');
+            if (res.ok) {
+                const sessions = await res.json();
+                renderSessionList(sessions);
+            }
+        } catch (e) { console.error("Failed to load sessions", e); }
+    }
+
+    function renderSessionList(sessions) {
+        sessionList.innerHTML = '';
+        // Sort by recency (if we had timestamp, for now just list)
+        // Reverse to show newest (if list is chronological)
+        sessions.reverse().forEach(s => {
+            const div = document.createElement('div');
+            div.className = 'session-item';
+            div.textContent = `Session ${s.id.substring(0, 8)}...`;
+            div.title = s.id;
+            if (s.id === sessionId) div.classList.add('active');
+
+            div.addEventListener('click', () => loadSessionHistory(s.id));
+            sessionList.appendChild(div);
+        });
+    }
+
+    async function loadSessionHistory(id) {
+        if (id === sessionId) return; // Already here
+
+        sessionId = id;
+        localStorage.setItem('chat_session_id', sessionId);
+        highlightSession(id);
+
+        // Clear and Load
+        chatHistory.innerHTML = '';
+        const loadingId = appendLoading();
+
+        try {
+            const res = await fetch(`http://localhost:8000/sessions/${id}`);
+            if (res.ok) {
+                const history = await res.json();
+                removeMessage(loadingId);
+
+                if (history.length === 0) {
+                    // Empty session (maybe new)
+                    chatHistory.innerHTML = `<div class="message bot-message"><div class="message-content">New Conversation</div></div>`;
+                } else {
+                    history.forEach(msg => {
+                        const sender = msg.role === 'user' ? 'user' : 'bot';
+                        // For bot, we might need to parse rich content if we saved it rich.
+                        // Currently API returns simple text 'content'. 
+                        // If it was SQL result, it might be raw string in text.
+                        // For simplicity, just append text. 
+                        appendMessage(sender, msg.content);
+                    });
+                }
+            } else {
+                throw new Error("Failed to load");
+            }
+        } catch (e) {
+            removeMessage(loadingId);
+            appendMessage('bot', "Could not load history for this session.");
+        }
+    }
+
+    function highlightSession(id) {
+        document.querySelectorAll('.session-item').forEach(el => {
+            el.classList.remove('active');
+            if (el.title === id) el.classList.add('active');
+        });
     }
 
     // Theme Toggle Logic
@@ -33,6 +149,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // 1. Add User Message
         appendMessage('user', query);
         userInput.value = '';
+
+        // Refresh session list just in case (e.g. if this was first msg)
+        // Optimization: Debounce or only do it once per session start
 
         // 2. Add Loading Indicator
         const loadingId = appendLoading();
@@ -63,6 +182,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // 4. Remove Loading and Add Bot Response
             removeMessage(loadingId);
             appendBotResponse(data);
+
+            // Reload sessions list to show update (create new if needed)
+            loadSessions();
 
         } catch (error) {
             removeMessage(loadingId);
@@ -225,4 +347,47 @@ document.addEventListener('DOMContentLoaded', () => {
     function scrollToBottom() {
         chatHistory.scrollTop = chatHistory.scrollHeight;
     }
+
+    // System Status Polling
+    const statusIndicator = document.querySelector('.status-indicator');
+    const statusDot = document.querySelector('.status-dot');
+    const statusText = document.querySelector('.status-text');
+
+    async function checkSystemStatus() {
+        try {
+            // Note: Assuming API is running on localhost:8000
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s timeout
+
+            const response = await fetch('http://localhost:8000/', {
+                method: 'GET',
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            if (response.ok) {
+                setOnline();
+            } else {
+                setOffline();
+            }
+        } catch (error) {
+            setOffline();
+        }
+    }
+
+    function setOnline() {
+        statusIndicator.classList.remove('offline');
+        statusDot.classList.remove('offline');
+        statusText.textContent = 'System Online';
+    }
+
+    function setOffline() {
+        statusIndicator.classList.add('offline');
+        statusDot.classList.add('offline');
+        statusText.textContent = 'System Offline';
+    }
+
+    // Check immediately and then every 5 seconds
+    checkSystemStatus();
+    setInterval(checkSystemStatus, 5000);
 });
